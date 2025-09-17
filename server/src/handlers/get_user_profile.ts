@@ -1,4 +1,7 @@
+import { db } from '../db';
+import { usersTable, brandProfilesTable, influencerProfilesTable } from '../db/schema';
 import { type GetUserProfileInput, type User, type BrandProfile, type InfluencerProfile } from '../schema';
+import { eq } from 'drizzle-orm';
 
 export interface UserProfileResponse {
   user: User;
@@ -7,28 +10,49 @@ export interface UserProfileResponse {
 }
 
 export const getUserProfile = async (input: GetUserProfileInput): Promise<UserProfileResponse> => {
-  // This is a placeholder declaration! Real code should be implemented here.
-  // The goal of this handler is fetching a user and their associated profile (brand or influencer) from the database.
-  // Should return the user data along with their profile based on user_type.
-  return Promise.resolve({
-    user: {
-      id: input.user_id,
-      email: 'example@example.com',
-      password: 'hashed_password',
-      user_type: 'brand',
-      created_at: new Date(),
-      updated_at: new Date()
-    },
-    brandProfile: {
-      id: 1,
-      user_id: input.user_id,
-      company_name: 'Example Company',
-      description: 'A great company',
-      website: null,
-      industry: null,
-      logo_url: null,
-      created_at: new Date(),
-      updated_at: new Date()
+  try {
+    // First, fetch the user
+    const users = await db.select()
+      .from(usersTable)
+      .where(eq(usersTable.id, input.user_id))
+      .execute();
+
+    if (users.length === 0) {
+      throw new Error(`User with id ${input.user_id} not found`);
     }
-  } as UserProfileResponse);
+
+    const user = users[0];
+    const response: UserProfileResponse = { user };
+
+    // Fetch associated profile based on user_type
+    if (user.user_type === 'brand') {
+      const brandProfiles = await db.select()
+        .from(brandProfilesTable)
+        .where(eq(brandProfilesTable.user_id, user.id))
+        .execute();
+
+      if (brandProfiles.length > 0) {
+        response.brandProfile = brandProfiles[0];
+      }
+    } else if (user.user_type === 'influencer') {
+      const influencerProfiles = await db.select()
+        .from(influencerProfilesTable)
+        .where(eq(influencerProfilesTable.user_id, user.id))
+        .execute();
+
+      if (influencerProfiles.length > 0) {
+        const profile = influencerProfiles[0];
+        // Convert numeric field back to number
+        response.influencerProfile = {
+          ...profile,
+          engagement_rate: profile.engagement_rate ? parseFloat(profile.engagement_rate) : null
+        };
+      }
+    }
+
+    return response;
+  } catch (error) {
+    console.error('Get user profile failed:', error);
+    throw error;
+  }
 };

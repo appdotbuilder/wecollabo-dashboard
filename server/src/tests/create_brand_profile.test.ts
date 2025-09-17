@@ -1,154 +1,171 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { resetDB, createDB } from '../helpers';
 import { db } from '../db';
-import { usersTable, brandProfilesTable } from '../db/schema';
+import { brandProfilesTable, usersTable } from '../db/schema';
 import { type CreateBrandProfileInput } from '../schema';
 import { createBrandProfile } from '../handlers/create_brand_profile';
 import { eq } from 'drizzle-orm';
 
-// Test input for brand profile creation
-const testInput: CreateBrandProfileInput = {
-  user_id: 1,
-  company_name: 'Test Company',
-  company_description: 'A test company',
-  logo: 'https://example.com/logo.png',
-  website: 'https://testcompany.com',
-  industry: 'Technology'
+// Test brand user
+const testBrandUser = {
+  email: 'brand@test.com',
+  password: 'password123',
+  user_type: 'brand' as const
+};
+
+// Test influencer user (for negative testing)
+const testInfluencerUser = {
+  email: 'influencer@test.com', 
+  password: 'password123',
+  user_type: 'influencer' as const
 };
 
 describe('createBrandProfile', () => {
   beforeEach(createDB);
   afterEach(resetDB);
 
-  it('should create a brand profile successfully', async () => {
-    // Create a brand user first
-    await db.insert(usersTable)
-      .values({
-        email: 'brand@test.com',
-        password_hash: 'hashed_password',
-        user_type: 'brand'
-      })
+  it('should create a brand profile for a valid brand user', async () => {
+    // Create test brand user first
+    const userResult = await db.insert(usersTable)
+      .values(testBrandUser)
+      .returning()
       .execute();
+    const userId = userResult[0].id;
+
+    const testInput: CreateBrandProfileInput = {
+      user_id: userId,
+      company_name: 'Test Company',
+      description: 'A test company description',
+      website: 'https://testcompany.com',
+      industry: 'Technology',
+      logo_url: 'https://example.com/logo.png'
+    };
 
     const result = await createBrandProfile(testInput);
 
-    // Verify all fields are correctly set
-    expect(result.user_id).toEqual(1);
+    // Verify all fields
+    expect(result.user_id).toEqual(userId);
     expect(result.company_name).toEqual('Test Company');
-    expect(result.company_description).toEqual('A test company');
-    expect(result.logo).toEqual('https://example.com/logo.png');
+    expect(result.description).toEqual('A test company description');
     expect(result.website).toEqual('https://testcompany.com');
     expect(result.industry).toEqual('Technology');
-    expect(result.total_campaigns).toEqual(0);
-    expect(result.rating).toEqual(0);
-    expect(typeof result.rating).toEqual('number');
+    expect(result.logo_url).toEqual('https://example.com/logo.png');
     expect(result.id).toBeDefined();
     expect(result.created_at).toBeInstanceOf(Date);
     expect(result.updated_at).toBeInstanceOf(Date);
   });
 
-  it('should create brand profile with minimal required fields', async () => {
-    // Create a brand user first
-    await db.insert(usersTable)
-      .values({
-        email: 'brand@test.com',
-        password_hash: 'hashed_password',
-        user_type: 'brand'
-      })
+  it('should create a brand profile with optional fields as null', async () => {
+    // Create test brand user first
+    const userResult = await db.insert(usersTable)
+      .values(testBrandUser)
+      .returning()
       .execute();
+    const userId = userResult[0].id;
 
-    const minimalInput: CreateBrandProfileInput = {
-      user_id: 1,
+    const testInput: CreateBrandProfileInput = {
+      user_id: userId,
       company_name: 'Minimal Company'
     };
 
-    const result = await createBrandProfile(minimalInput);
+    const result = await createBrandProfile(testInput);
 
-    expect(result.user_id).toEqual(1);
+    expect(result.user_id).toEqual(userId);
     expect(result.company_name).toEqual('Minimal Company');
-    expect(result.company_description).toBeNull();
-    expect(result.logo).toBeNull();
+    expect(result.description).toBeNull();
     expect(result.website).toBeNull();
     expect(result.industry).toBeNull();
-    expect(result.total_campaigns).toEqual(0);
-    expect(result.rating).toEqual(0);
+    expect(result.logo_url).toBeNull();
     expect(result.id).toBeDefined();
+    expect(result.created_at).toBeInstanceOf(Date);
+    expect(result.updated_at).toBeInstanceOf(Date);
   });
 
   it('should save brand profile to database', async () => {
-    // Create a brand user first
-    await db.insert(usersTable)
-      .values({
-        email: 'brand@test.com',
-        password_hash: 'hashed_password',
-        user_type: 'brand'
-      })
+    // Create test brand user first
+    const userResult = await db.insert(usersTable)
+      .values(testBrandUser)
+      .returning()
       .execute();
+    const userId = userResult[0].id;
+
+    const testInput: CreateBrandProfileInput = {
+      user_id: userId,
+      company_name: 'Database Test Company',
+      description: 'Testing database persistence',
+      website: 'https://dbtest.com',
+      industry: 'Testing',
+      logo_url: 'https://example.com/dblogo.png'
+    };
 
     const result = await createBrandProfile(testInput);
 
-    // Query the database to verify the profile was saved
+    // Query the database to verify the record was saved
     const profiles = await db.select()
       .from(brandProfilesTable)
       .where(eq(brandProfilesTable.id, result.id))
       .execute();
 
     expect(profiles).toHaveLength(1);
-    expect(profiles[0].user_id).toEqual(1);
-    expect(profiles[0].company_name).toEqual('Test Company');
-    expect(profiles[0].company_description).toEqual('A test company');
-    expect(profiles[0].logo).toEqual('https://example.com/logo.png');
-    expect(profiles[0].website).toEqual('https://testcompany.com');
-    expect(profiles[0].industry).toEqual('Technology');
-    expect(profiles[0].total_campaigns).toEqual(0);
-    expect(parseFloat(profiles[0].rating)).toEqual(0);
+    expect(profiles[0].user_id).toEqual(userId);
+    expect(profiles[0].company_name).toEqual('Database Test Company');
+    expect(profiles[0].description).toEqual('Testing database persistence');
+    expect(profiles[0].website).toEqual('https://dbtest.com');
+    expect(profiles[0].industry).toEqual('Testing');
+    expect(profiles[0].logo_url).toEqual('https://example.com/dblogo.png');
     expect(profiles[0].created_at).toBeInstanceOf(Date);
     expect(profiles[0].updated_at).toBeInstanceOf(Date);
   });
 
-  it('should throw error if user does not exist', async () => {
-    // Don't create any user
-    expect(createBrandProfile(testInput)).rejects.toThrow(/user not found/i);
-  });
-
-  it('should throw error if user is not of type brand', async () => {
-    // Create an influencer user instead of brand user
-    await db.insert(usersTable)
-      .values({
-        email: 'influencer@test.com',
-        password_hash: 'hashed_password',
-        user_type: 'influencer'
-      })
-      .execute();
-
-    expect(createBrandProfile(testInput)).rejects.toThrow(/user must be of type "brand"/i);
-  });
-
-  it('should handle optional fields correctly', async () => {
-    // Create a brand user first
-    await db.insert(usersTable)
-      .values({
-        email: 'brand@test.com',
-        password_hash: 'hashed_password',
-        user_type: 'brand'
-      })
-      .execute();
-
-    const inputWithOptionals: CreateBrandProfileInput = {
-      user_id: 1,
-      company_name: 'Test Company',
-      company_description: undefined,
-      logo: undefined,
-      website: undefined,
-      industry: undefined
+  it('should throw error for non-existent user', async () => {
+    const testInput: CreateBrandProfileInput = {
+      user_id: 999999, // Non-existent user ID
+      company_name: 'Test Company'
     };
 
-    const result = await createBrandProfile(inputWithOptionals);
+    await expect(createBrandProfile(testInput)).rejects.toThrow(/User with id 999999 not found/i);
+  });
 
-    expect(result.company_name).toEqual('Test Company');
-    expect(result.company_description).toBeNull();
-    expect(result.logo).toBeNull();
+  it('should throw error for non-brand user type', async () => {
+    // Create test influencer user first
+    const userResult = await db.insert(usersTable)
+      .values(testInfluencerUser)
+      .returning()
+      .execute();
+    const userId = userResult[0].id;
+
+    const testInput: CreateBrandProfileInput = {
+      user_id: userId,
+      company_name: 'Should Fail Company'
+    };
+
+    await expect(createBrandProfile(testInput)).rejects.toThrow(/User with id .* is not a brand user/i);
+  });
+
+  it('should handle undefined optional fields correctly', async () => {
+    // Create test brand user first
+    const userResult = await db.insert(usersTable)
+      .values(testBrandUser)
+      .returning()
+      .execute();
+    const userId = userResult[0].id;
+
+    const testInput: CreateBrandProfileInput = {
+      user_id: userId,
+      company_name: 'Undefined Fields Company',
+      description: undefined,
+      website: undefined,
+      industry: undefined,
+      logo_url: undefined
+    };
+
+    const result = await createBrandProfile(testInput);
+
+    expect(result.user_id).toEqual(userId);
+    expect(result.company_name).toEqual('Undefined Fields Company');
+    expect(result.description).toBeNull();
     expect(result.website).toBeNull();
     expect(result.industry).toBeNull();
+    expect(result.logo_url).toBeNull();
   });
 });

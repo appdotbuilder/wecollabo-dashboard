@@ -1,14 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { resetDB, createDB } from '../helpers';
 import { db } from '../db';
-import { 
-  usersTable, 
-  influencerProfilesTable, 
-  brandProfilesTable, 
-  campaignsTable, 
-  collaborationsTable, 
-  reviewsTable 
-} from '../db/schema';
+import { usersTable, reviewsTable } from '../db/schema';
 import { type CreateReviewInput } from '../schema';
 import { createReview } from '../handlers/create_review';
 import { eq, and } from 'drizzle-orm';
@@ -17,328 +10,251 @@ describe('createReview', () => {
   beforeEach(createDB);
   afterEach(resetDB);
 
-  let testUsers: any[];
-  let testInfluencerProfile: any;
-  let testBrandProfile: any;
-  let testCampaign: any;
-  let testCollaboration: any;
+  let brandUserId: number;
+  let influencerUserId: number;
 
   beforeEach(async () => {
-    // Create test users
-    testUsers = await db.insert(usersTable)
-      .values([
-        {
-          email: 'influencer@test.com',
-          password_hash: 'hash123',
-          user_type: 'influencer',
-          is_verified: true
-        },
-        {
-          email: 'brand@test.com',
-          password_hash: 'hash456',
-          user_type: 'brand',
-          is_verified: true
-        }
-      ])
-      .returning()
-      .execute();
-
-    // Create influencer profile
-    const influencerProfiles = await db.insert(influencerProfilesTable)
+    // Create a brand user
+    const brandResult = await db.insert(usersTable)
       .values({
-        user_id: testUsers[0].id,
-        display_name: 'Test Influencer',
-        bio: 'Test bio',
-        total_reach: 10000,
-        engagement_rate: '5.5'
+        email: 'brand@test.com',
+        password: 'password123',
+        user_type: 'brand'
       })
       .returning()
       .execute();
-    
-    testInfluencerProfile = influencerProfiles[0];
+    brandUserId = brandResult[0].id;
 
-    // Create brand profile
-    const brandProfiles = await db.insert(brandProfilesTable)
+    // Create an influencer user
+    const influencerResult = await db.insert(usersTable)
       .values({
-        user_id: testUsers[1].id,
-        company_name: 'Test Brand',
-        company_description: 'Test description'
+        email: 'influencer@test.com',
+        password: 'password123',
+        user_type: 'influencer'
       })
       .returning()
       .execute();
-    
-    testBrandProfile = brandProfiles[0];
-
-    // Create campaign
-    const campaigns = await db.insert(campaignsTable)
-      .values({
-        brand_id: testBrandProfile.id,
-        title: 'Test Campaign',
-        description: 'Test campaign description',
-        budget: '1000.00',
-        deliverable_requirements: 'Test requirements',
-        start_date: new Date('2024-01-01'),
-        end_date: new Date('2024-12-31'),
-        status: 'active'
-      })
-      .returning()
-      .execute();
-    
-    testCampaign = campaigns[0];
-
-    // Create completed collaboration
-    const collaborations = await db.insert(collaborationsTable)
-      .values({
-        campaign_id: testCampaign.id,
-        influencer_id: testInfluencerProfile.id,
-        agreed_price: '500.00',
-        status: 'completed'
-      })
-      .returning()
-      .execute();
-    
-    testCollaboration = collaborations[0];
+    influencerUserId = influencerResult[0].id;
   });
 
-  const createValidReviewInput = (): CreateReviewInput => ({
-    collaboration_id: testCollaboration.id,
-    reviewer_id: testUsers[0].id, // influencer reviewing brand
-    reviewee_id: testUsers[1].id,
+  const testInput: CreateReviewInput = {
+    brand_user_id: 0, // Will be set in tests
+    influencer_user_id: 0, // Will be set in tests
     rating: 4,
-    comment: 'Great collaboration experience!'
-  });
+    feedback: 'Great work on the campaign!'
+  };
 
   it('should create a review successfully', async () => {
-    const input = createValidReviewInput();
+    const input = {
+      ...testInput,
+      brand_user_id: brandUserId,
+      influencer_user_id: influencerUserId
+    };
+
     const result = await createReview(input);
 
-    // Verify returned data
-    expect(result.collaboration_id).toEqual(testCollaboration.id);
-    expect(result.reviewer_id).toEqual(testUsers[0].id);
-    expect(result.reviewee_id).toEqual(testUsers[1].id);
+    expect(result.brand_user_id).toEqual(brandUserId);
+    expect(result.influencer_user_id).toEqual(influencerUserId);
     expect(result.rating).toEqual(4);
-    expect(result.comment).toEqual('Great collaboration experience!');
+    expect(result.feedback).toEqual('Great work on the campaign!');
     expect(result.id).toBeDefined();
     expect(result.created_at).toBeInstanceOf(Date);
     expect(result.updated_at).toBeInstanceOf(Date);
   });
 
   it('should save review to database', async () => {
-    const input = createValidReviewInput();
+    const input = {
+      ...testInput,
+      brand_user_id: brandUserId,
+      influencer_user_id: influencerUserId
+    };
+
     const result = await createReview(input);
 
-    // Verify in database
     const reviews = await db.select()
       .from(reviewsTable)
       .where(eq(reviewsTable.id, result.id))
       .execute();
 
     expect(reviews).toHaveLength(1);
-    expect(reviews[0].collaboration_id).toEqual(testCollaboration.id);
-    expect(reviews[0].reviewer_id).toEqual(testUsers[0].id);
-    expect(reviews[0].reviewee_id).toEqual(testUsers[1].id);
+    expect(reviews[0].brand_user_id).toEqual(brandUserId);
+    expect(reviews[0].influencer_user_id).toEqual(influencerUserId);
     expect(reviews[0].rating).toEqual(4);
-    expect(reviews[0].comment).toEqual('Great collaboration experience!');
+    expect(reviews[0].feedback).toEqual('Great work on the campaign!');
+    expect(reviews[0].created_at).toBeInstanceOf(Date);
+    expect(reviews[0].updated_at).toBeInstanceOf(Date);
   });
 
-  it('should allow brand to review influencer', async () => {
-    const input: CreateReviewInput = {
-      collaboration_id: testCollaboration.id,
-      reviewer_id: testUsers[1].id, // brand reviewing influencer
-      reviewee_id: testUsers[0].id,
-      rating: 5,
-      comment: 'Excellent work!'
+  it('should throw error when brand user does not exist', async () => {
+    const input = {
+      ...testInput,
+      brand_user_id: 99999, // Non-existent user
+      influencer_user_id: influencerUserId
     };
 
-    const result = await createReview(input);
-
-    expect(result.reviewer_id).toEqual(testUsers[1].id);
-    expect(result.reviewee_id).toEqual(testUsers[0].id);
-    expect(result.rating).toEqual(5);
-    expect(result.comment).toEqual('Excellent work!');
+    await expect(createReview(input)).rejects.toThrow(/brand user not found/i);
   });
 
-  it('should create review without comment', async () => {
-    const input: CreateReviewInput = {
-      collaboration_id: testCollaboration.id,
-      reviewer_id: testUsers[0].id,
-      reviewee_id: testUsers[1].id,
-      rating: 3
-      // comment is optional
+  it('should throw error when influencer user does not exist', async () => {
+    const input = {
+      ...testInput,
+      brand_user_id: brandUserId,
+      influencer_user_id: 99999 // Non-existent user
     };
 
-    const result = await createReview(input);
-
-    expect(result.comment).toBeNull();
-    expect(result.rating).toEqual(3);
+    await expect(createReview(input)).rejects.toThrow(/influencer user not found/i);
   });
 
-  it('should throw error for non-existent collaboration', async () => {
-    const input: CreateReviewInput = {
-      collaboration_id: 99999,
-      reviewer_id: testUsers[0].id,
-      reviewee_id: testUsers[1].id,
-      rating: 4,
-      comment: 'Test review'
-    };
-
-    await expect(createReview(input)).rejects.toThrow(/collaboration not found/i);
-  });
-
-  it('should throw error for non-completed collaboration', async () => {
-    // Create a pending collaboration
-    const pendingCollaborations = await db.insert(collaborationsTable)
+  it('should throw error when brand_user_id is not a brand', async () => {
+    // Create another user of type 'influencer'
+    const anotherInfluencerResult = await db.insert(usersTable)
       .values({
-        campaign_id: testCampaign.id,
-        influencer_id: testInfluencerProfile.id,
-        agreed_price: '300.00',
-        status: 'pending'
+        email: 'another-influencer@test.com',
+        password: 'password123',
+        user_type: 'influencer'
       })
       .returning()
       .execute();
 
-    const input: CreateReviewInput = {
-      collaboration_id: pendingCollaborations[0].id,
-      reviewer_id: testUsers[0].id,
-      reviewee_id: testUsers[1].id,
-      rating: 4,
-      comment: 'Test review'
+    const input = {
+      ...testInput,
+      brand_user_id: anotherInfluencerResult[0].id, // Using influencer as brand
+      influencer_user_id: influencerUserId
     };
 
-    await expect(createReview(input)).rejects.toThrow(/reviews can only be created for completed collaborations/i);
+    await expect(createReview(input)).rejects.toThrow(/user is not a brand/i);
   });
 
-  it('should throw error for unauthorized reviewer', async () => {
-    // Create another user who is not part of the collaboration
-    const unauthorizedUsers = await db.insert(usersTable)
+  it('should throw error when influencer_user_id is not an influencer', async () => {
+    // Create another user of type 'brand'
+    const anotherBrandResult = await db.insert(usersTable)
       .values({
-        email: 'unauthorized@test.com',
-        password_hash: 'hash789',
-        user_type: 'brand',
-        is_verified: true
+        email: 'another-brand@test.com',
+        password: 'password123',
+        user_type: 'brand'
       })
       .returning()
       .execute();
 
-    const input: CreateReviewInput = {
-      collaboration_id: testCollaboration.id,
-      reviewer_id: unauthorizedUsers[0].id,
-      reviewee_id: testUsers[1].id,
-      rating: 4,
-      comment: 'Unauthorized review'
+    const input = {
+      ...testInput,
+      brand_user_id: brandUserId,
+      influencer_user_id: anotherBrandResult[0].id // Using brand as influencer
     };
 
-    await expect(createReview(input)).rejects.toThrow(/only collaboration participants can create reviews/i);
+    await expect(createReview(input)).rejects.toThrow(/user is not an influencer/i);
   });
 
-  it('should throw error for invalid reviewee', async () => {
-    // Try to review someone who is not the other party in the collaboration
-    const otherUsers = await db.insert(usersTable)
-      .values({
-        email: 'other@test.com',
-        password_hash: 'hash999',
-        user_type: 'influencer',
-        is_verified: true
-      })
-      .returning()
-      .execute();
-
-    const input: CreateReviewInput = {
-      collaboration_id: testCollaboration.id,
-      reviewer_id: testUsers[0].id, // valid reviewer
-      reviewee_id: otherUsers[0].id, // invalid reviewee
-      rating: 4,
-      comment: 'Invalid reviewee test'
+  it('should prevent duplicate reviews from same brand to same influencer', async () => {
+    const input = {
+      ...testInput,
+      brand_user_id: brandUserId,
+      influencer_user_id: influencerUserId
     };
 
-    await expect(createReview(input)).rejects.toThrow(/invalid reviewee - must be the other party in the collaboration/i);
-  });
-
-  it('should throw error when review already exists', async () => {
-    // Create initial review
-    const input = createValidReviewInput();
+    // Create first review
     await createReview(input);
 
-    // Try to create another review from the same reviewer for the same collaboration
-    const duplicateInput: CreateReviewInput = {
-      collaboration_id: testCollaboration.id,
-      reviewer_id: testUsers[0].id,
-      reviewee_id: testUsers[1].id,
-      rating: 2,
-      comment: 'Duplicate review attempt'
-    };
-
-    await expect(createReview(duplicateInput)).rejects.toThrow(/review already exists for this collaboration from this reviewer/i);
+    // Attempt to create duplicate review
+    await expect(createReview(input)).rejects.toThrow(/review already exists/i);
   });
 
-  it('should allow both parties to review each other', async () => {
-    // Influencer reviews brand
-    const influencerReviewInput: CreateReviewInput = {
-      collaboration_id: testCollaboration.id,
-      reviewer_id: testUsers[0].id,
-      reviewee_id: testUsers[1].id,
-      rating: 4,
-      comment: 'Brand was professional'
-    };
-
-    const influencerReview = await createReview(influencerReviewInput);
-
-    // Brand reviews influencer
-    const brandReviewInput: CreateReviewInput = {
-      collaboration_id: testCollaboration.id,
-      reviewer_id: testUsers[1].id,
-      reviewee_id: testUsers[0].id,
-      rating: 5,
-      comment: 'Influencer delivered great content'
-    };
-
-    const brandReview = await createReview(brandReviewInput);
-
-    // Verify both reviews exist
-    expect(influencerReview.id).toBeDefined();
-    expect(brandReview.id).toBeDefined();
-    expect(influencerReview.id).not.toEqual(brandReview.id);
-
-    // Verify both reviews are in database
-    const allReviews = await db.select()
-      .from(reviewsTable)
-      .where(eq(reviewsTable.collaboration_id, testCollaboration.id))
-      .execute();
-
-    expect(allReviews).toHaveLength(2);
-  });
-
-  it('should handle edge case rating values correctly', async () => {
-    // Test minimum rating
-    const minRatingInput: CreateReviewInput = {
-      collaboration_id: testCollaboration.id,
-      reviewer_id: testUsers[0].id,
-      reviewee_id: testUsers[1].id,
-      rating: 1,
-      comment: 'Minimum rating test'
-    };
-
-    const minResult = await createReview(minRatingInput);
-    expect(minResult.rating).toEqual(1);
-
-    // Create another collaboration for max rating test
-    const newCollaborations = await db.insert(collaborationsTable)
+  it('should allow different brands to review the same influencer', async () => {
+    // Create another brand user
+    const anotherBrandResult = await db.insert(usersTable)
       .values({
-        campaign_id: testCampaign.id,
-        influencer_id: testInfluencerProfile.id,
-        agreed_price: '400.00',
-        status: 'completed'
+        email: 'another-brand@test.com',
+        password: 'password123',
+        user_type: 'brand'
       })
       .returning()
       .execute();
 
-    // Test maximum rating
-    const maxRatingInput: CreateReviewInput = {
-      collaboration_id: newCollaborations[0].id,
-      reviewer_id: testUsers[1].id,
-      reviewee_id: testUsers[0].id,
+    const firstInput = {
+      ...testInput,
+      brand_user_id: brandUserId,
+      influencer_user_id: influencerUserId
+    };
+
+    const secondInput = {
+      ...testInput,
+      brand_user_id: anotherBrandResult[0].id,
+      influencer_user_id: influencerUserId,
       rating: 5,
-      comment: 'Maximum rating test'
+      feedback: 'Excellent collaboration!'
+    };
+
+    // Both reviews should succeed
+    const firstReview = await createReview(firstInput);
+    const secondReview = await createReview(secondInput);
+
+    expect(firstReview.id).not.toEqual(secondReview.id);
+    expect(firstReview.brand_user_id).not.toEqual(secondReview.brand_user_id);
+    expect(firstReview.influencer_user_id).toEqual(secondReview.influencer_user_id);
+  });
+
+  it('should allow same brand to review different influencers', async () => {
+    // Create another influencer user
+    const anotherInfluencerResult = await db.insert(usersTable)
+      .values({
+        email: 'another-influencer@test.com',
+        password: 'password123',
+        user_type: 'influencer'
+      })
+      .returning()
+      .execute();
+
+    const firstInput = {
+      ...testInput,
+      brand_user_id: brandUserId,
+      influencer_user_id: influencerUserId
+    };
+
+    const secondInput = {
+      ...testInput,
+      brand_user_id: brandUserId,
+      influencer_user_id: anotherInfluencerResult[0].id,
+      rating: 3,
+      feedback: 'Good work, room for improvement'
+    };
+
+    // Both reviews should succeed
+    const firstReview = await createReview(firstInput);
+    const secondReview = await createReview(secondInput);
+
+    expect(firstReview.id).not.toEqual(secondReview.id);
+    expect(firstReview.brand_user_id).toEqual(secondReview.brand_user_id);
+    expect(firstReview.influencer_user_id).not.toEqual(secondReview.influencer_user_id);
+  });
+
+  it('should handle edge case ratings correctly', async () => {
+    const minRatingInput = {
+      ...testInput,
+      brand_user_id: brandUserId,
+      influencer_user_id: influencerUserId,
+      rating: 1,
+      feedback: 'Needs improvement'
+    };
+
+    const result = await createReview(minRatingInput);
+    expect(result.rating).toEqual(1);
+
+    // Create another influencer for max rating test
+    const anotherInfluencerResult = await db.insert(usersTable)
+      .values({
+        email: 'another-influencer@test.com',
+        password: 'password123',
+        user_type: 'influencer'
+      })
+      .returning()
+      .execute();
+
+    const maxRatingInput = {
+      ...testInput,
+      brand_user_id: brandUserId,
+      influencer_user_id: anotherInfluencerResult[0].id,
+      rating: 5,
+      feedback: 'Outstanding work!'
     };
 
     const maxResult = await createReview(maxRatingInput);

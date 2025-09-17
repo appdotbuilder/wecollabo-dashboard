@@ -10,62 +10,94 @@ describe('createInfluencerProfile', () => {
   beforeEach(createDB);
   afterEach(resetDB);
 
-  // Helper function to create a test user
-  const createTestUser = async (userType: 'influencer' | 'brand' = 'influencer') => {
+  // Helper to create a test user
+  const createTestUser = async (userType: 'brand' | 'influencer' = 'influencer') => {
     const result = await db.insert(usersTable)
       .values({
         email: `test-${Date.now()}@example.com`,
-        password_hash: 'hashed_password',
+        password: 'password123',
         user_type: userType
       })
       .returning()
       .execute();
-    
     return result[0];
   };
 
-  const testInput: CreateInfluencerProfileInput = {
-    user_id: 1, // Will be overridden in tests
-    display_name: 'Test Influencer',
-    bio: 'A test influencer profile',
-    profile_image: 'https://example.com/profile.jpg',
-    total_reach: 50000,
-    engagement_rate: 4.5
-  };
-
-  it('should create an influencer profile successfully', async () => {
+  it('should create an influencer profile with all fields', async () => {
     const user = await createTestUser('influencer');
-    const input = { ...testInput, user_id: user.id };
+    
+    const testInput: CreateInfluencerProfileInput = {
+      user_id: user.id,
+      display_name: 'Test Influencer',
+      bio: 'A test influencer bio',
+      avatar_url: 'https://example.com/avatar.jpg',
+      instagram_handle: '@testinfluencer',
+      tiktok_handle: '@testtiktok',
+      youtube_handle: '@testyoutube',
+      follower_count: 10000,
+      engagement_rate: 3.75,
+      category: 'lifestyle'
+    };
 
-    const result = await createInfluencerProfile(input);
+    const result = await createInfluencerProfile(testInput);
 
     // Basic field validation
-    expect(result.id).toBeDefined();
     expect(result.user_id).toEqual(user.id);
     expect(result.display_name).toEqual('Test Influencer');
-    expect(result.bio).toEqual('A test influencer profile');
-    expect(result.profile_image).toEqual('https://example.com/profile.jpg');
-    expect(result.total_reach).toEqual(50000);
-    expect(result.engagement_rate).toEqual(4.5);
-    expect(result.total_collaborations).toEqual(0);
-    expect(result.rating).toEqual(0);
-    expect(result.total_earnings).toEqual(0);
+    expect(result.bio).toEqual('A test influencer bio');
+    expect(result.avatar_url).toEqual('https://example.com/avatar.jpg');
+    expect(result.instagram_handle).toEqual('@testinfluencer');
+    expect(result.tiktok_handle).toEqual('@testtiktok');
+    expect(result.youtube_handle).toEqual('@testyoutube');
+    expect(result.follower_count).toEqual(10000);
+    expect(result.engagement_rate).toEqual(3.75);
+    expect(typeof result.engagement_rate).toBe('number');
+    expect(result.category).toEqual('lifestyle');
+    expect(result.id).toBeDefined();
     expect(result.created_at).toBeInstanceOf(Date);
     expect(result.updated_at).toBeInstanceOf(Date);
-
-    // Verify numeric types
-    expect(typeof result.engagement_rate).toBe('number');
-    expect(typeof result.rating).toBe('number');
-    expect(typeof result.total_earnings).toBe('number');
   });
 
-  it('should save influencer profile to database', async () => {
+  it('should create an influencer profile with minimal fields', async () => {
     const user = await createTestUser('influencer');
-    const input = { ...testInput, user_id: user.id };
+    
+    const testInput: CreateInfluencerProfileInput = {
+      user_id: user.id,
+      display_name: 'Minimal Influencer'
+    };
 
-    const result = await createInfluencerProfile(input);
+    const result = await createInfluencerProfile(testInput);
 
-    // Query database to verify record was saved
+    // Basic field validation
+    expect(result.user_id).toEqual(user.id);
+    expect(result.display_name).toEqual('Minimal Influencer');
+    expect(result.bio).toBeNull();
+    expect(result.avatar_url).toBeNull();
+    expect(result.instagram_handle).toBeNull();
+    expect(result.tiktok_handle).toBeNull();
+    expect(result.youtube_handle).toBeNull();
+    expect(result.follower_count).toBeNull();
+    expect(result.engagement_rate).toBeNull();
+    expect(result.category).toBeNull();
+    expect(result.id).toBeDefined();
+    expect(result.created_at).toBeInstanceOf(Date);
+    expect(result.updated_at).toBeInstanceOf(Date);
+  });
+
+  it('should save profile to database', async () => {
+    const user = await createTestUser('influencer');
+    
+    const testInput: CreateInfluencerProfileInput = {
+      user_id: user.id,
+      display_name: 'Database Test Influencer',
+      bio: 'Testing database persistence',
+      follower_count: 5000,
+      engagement_rate: 2.5
+    };
+
+    const result = await createInfluencerProfile(testInput);
+
+    // Query database to verify profile was saved
     const profiles = await db.select()
       .from(influencerProfilesTable)
       .where(eq(influencerProfilesTable.id, result.id))
@@ -73,87 +105,85 @@ describe('createInfluencerProfile', () => {
 
     expect(profiles).toHaveLength(1);
     expect(profiles[0].user_id).toEqual(user.id);
-    expect(profiles[0].display_name).toEqual('Test Influencer');
-    expect(profiles[0].bio).toEqual('A test influencer profile');
-    expect(profiles[0].profile_image).toEqual('https://example.com/profile.jpg');
-    expect(profiles[0].total_reach).toEqual(50000);
-    expect(parseFloat(profiles[0].engagement_rate)).toEqual(4.5);
-    expect(profiles[0].total_collaborations).toEqual(0);
-    expect(parseFloat(profiles[0].rating)).toEqual(0);
-    expect(parseFloat(profiles[0].total_earnings)).toEqual(0);
+    expect(profiles[0].display_name).toEqual('Database Test Influencer');
+    expect(profiles[0].bio).toEqual('Testing database persistence');
+    expect(profiles[0].follower_count).toEqual(5000);
+    expect(parseFloat(profiles[0].engagement_rate!)).toEqual(2.5);
+    expect(profiles[0].created_at).toBeInstanceOf(Date);
+    expect(profiles[0].updated_at).toBeInstanceOf(Date);
   });
 
-  it('should handle optional fields correctly', async () => {
+  it('should handle numeric conversion for engagement_rate correctly', async () => {
     const user = await createTestUser('influencer');
-    const input = {
+    
+    const testInput: CreateInfluencerProfileInput = {
       user_id: user.id,
-      display_name: 'Minimal Influencer',
-      total_reach: 10000,
-      engagement_rate: 2.8
+      display_name: 'Numeric Test Influencer',
+      engagement_rate: 4.85
     };
 
-    const result = await createInfluencerProfile(input);
+    const result = await createInfluencerProfile(testInput);
 
-    expect(result.display_name).toEqual('Minimal Influencer');
+    // Verify engagement_rate is returned as a number
+    expect(typeof result.engagement_rate).toBe('number');
+    expect(result.engagement_rate).toEqual(4.85);
+
+    // Verify it's stored correctly in database
+    const profiles = await db.select()
+      .from(influencerProfilesTable)
+      .where(eq(influencerProfilesTable.id, result.id))
+      .execute();
+
+    expect(parseFloat(profiles[0].engagement_rate!)).toEqual(4.85);
+  });
+
+  it('should throw error for non-existent user', async () => {
+    const testInput: CreateInfluencerProfileInput = {
+      user_id: 99999, // Non-existent user ID
+      display_name: 'Non-existent User Profile'
+    };
+
+    await expect(createInfluencerProfile(testInput))
+      .rejects.toThrow(/user not found/i);
+  });
+
+  it('should throw error for non-influencer user type', async () => {
+    const user = await createTestUser('brand'); // Create brand user instead
+    
+    const testInput: CreateInfluencerProfileInput = {
+      user_id: user.id,
+      display_name: 'Brand User Profile'
+    };
+
+    await expect(createInfluencerProfile(testInput))
+      .rejects.toThrow(/user must be of type "influencer"/i);
+  });
+
+  it('should handle null/undefined optional fields correctly', async () => {
+    const user = await createTestUser('influencer');
+    
+    const testInput: CreateInfluencerProfileInput = {
+      user_id: user.id,
+      display_name: 'Null Fields Test',
+      bio: undefined,
+      avatar_url: undefined,
+      instagram_handle: null,
+      tiktok_handle: null,
+      youtube_handle: undefined,
+      follower_count: null,
+      engagement_rate: undefined,
+      category: null
+    };
+
+    const result = await createInfluencerProfile(testInput);
+
     expect(result.bio).toBeNull();
-    expect(result.profile_image).toBeNull();
-    expect(result.total_reach).toEqual(10000);
-    expect(result.engagement_rate).toEqual(2.8);
-  });
-
-  it('should throw error if user does not exist', async () => {
-    const input = { ...testInput, user_id: 99999 };
-
-    await expect(createInfluencerProfile(input)).rejects.toThrow(/User with id 99999 not found/i);
-  });
-
-  it('should throw error if user is not an influencer', async () => {
-    const user = await createTestUser('brand');
-    const input = { ...testInput, user_id: user.id };
-
-    await expect(createInfluencerProfile(input)).rejects.toThrow(/is not an influencer/i);
-  });
-
-  it('should throw error if influencer profile already exists', async () => {
-    const user = await createTestUser('influencer');
-    const input = { ...testInput, user_id: user.id };
-
-    // Create first profile
-    await createInfluencerProfile(input);
-
-    // Attempt to create second profile for same user
-    await expect(createInfluencerProfile(input)).rejects.toThrow(/Influencer profile already exists/i);
-  });
-
-  it('should handle high engagement rate values', async () => {
-    const user = await createTestUser('influencer');
-    const input = {
-      ...testInput,
-      user_id: user.id,
-      engagement_rate: 95.75,
-      total_reach: 1000000
-    };
-
-    const result = await createInfluencerProfile(input);
-
-    expect(result.engagement_rate).toEqual(95.75);
-    expect(result.total_reach).toEqual(1000000);
-    expect(typeof result.engagement_rate).toBe('number');
-  });
-
-  it('should handle zero engagement rate and reach', async () => {
-    const user = await createTestUser('influencer');
-    const input = {
-      ...testInput,
-      user_id: user.id,
-      engagement_rate: 0,
-      total_reach: 0
-    };
-
-    const result = await createInfluencerProfile(input);
-
-    expect(result.engagement_rate).toEqual(0);
-    expect(result.total_reach).toEqual(0);
-    expect(typeof result.engagement_rate).toBe('number');
+    expect(result.avatar_url).toBeNull();
+    expect(result.instagram_handle).toBeNull();
+    expect(result.tiktok_handle).toBeNull();
+    expect(result.youtube_handle).toBeNull();
+    expect(result.follower_count).toBeNull();
+    expect(result.engagement_rate).toBeNull();
+    expect(result.category).toBeNull();
   });
 });

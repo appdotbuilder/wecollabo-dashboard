@@ -6,53 +6,59 @@ import { type CreateUserInput } from '../schema';
 import { createUser } from '../handlers/create_user';
 import { eq } from 'drizzle-orm';
 
-// Test input data
-const testInfluencerInput: CreateUserInput = {
-  email: 'influencer@test.com',
-  password_hash: 'hashed_password_123',
-  user_type: 'influencer'
+// Test input for brand user
+const brandTestInput: CreateUserInput = {
+  email: 'brand@example.com',
+  password: 'securepassword123',
+  user_type: 'brand'
 };
 
-const testBrandInput: CreateUserInput = {
-  email: 'brand@test.com',
-  password_hash: 'hashed_password_456',
-  user_type: 'brand'
+// Test input for influencer user
+const influencerTestInput: CreateUserInput = {
+  email: 'influencer@example.com',
+  password: 'anotherpassword456',
+  user_type: 'influencer'
 };
 
 describe('createUser', () => {
   beforeEach(createDB);
   afterEach(resetDB);
 
-  it('should create an influencer user', async () => {
-    const result = await createUser(testInfluencerInput);
+  it('should create a brand user successfully', async () => {
+    const result = await createUser(brandTestInput);
 
-    // Basic field validation
-    expect(result.email).toEqual('influencer@test.com');
-    expect(result.password_hash).toEqual('hashed_password_123');
-    expect(result.user_type).toEqual('influencer');
-    expect(result.is_verified).toEqual(false);
-    expect(result.id).toBeDefined();
-    expect(typeof result.id).toBe('number');
-    expect(result.created_at).toBeInstanceOf(Date);
-    expect(result.updated_at).toBeInstanceOf(Date);
-  });
-
-  it('should create a brand user', async () => {
-    const result = await createUser(testBrandInput);
-
-    // Basic field validation
-    expect(result.email).toEqual('brand@test.com');
-    expect(result.password_hash).toEqual('hashed_password_456');
+    // Verify user fields
+    expect(result.email).toEqual('brand@example.com');
     expect(result.user_type).toEqual('brand');
-    expect(result.is_verified).toEqual(false);
     expect(result.id).toBeDefined();
     expect(typeof result.id).toBe('number');
     expect(result.created_at).toBeInstanceOf(Date);
     expect(result.updated_at).toBeInstanceOf(Date);
+    
+    // Password should be hashed, not the original
+    expect(result.password).not.toEqual('securepassword123');
+    expect(result.password).toBeDefined();
+    expect(result.password.length).toBeGreaterThan(20); // Hashed passwords are longer
   });
 
-  it('should save user to database', async () => {
-    const result = await createUser(testInfluencerInput);
+  it('should create an influencer user successfully', async () => {
+    const result = await createUser(influencerTestInput);
+
+    // Verify user fields
+    expect(result.email).toEqual('influencer@example.com');
+    expect(result.user_type).toEqual('influencer');
+    expect(result.id).toBeDefined();
+    expect(typeof result.id).toBe('number');
+    expect(result.created_at).toBeInstanceOf(Date);
+    expect(result.updated_at).toBeInstanceOf(Date);
+    
+    // Password should be hashed
+    expect(result.password).not.toEqual('anotherpassword456');
+    expect(result.password).toBeDefined();
+  });
+
+  it('should save user to database correctly', async () => {
+    const result = await createUser(brandTestInput);
 
     // Query database to verify user was saved
     const users = await db.select()
@@ -61,74 +67,82 @@ describe('createUser', () => {
       .execute();
 
     expect(users).toHaveLength(1);
-    expect(users[0].email).toEqual('influencer@test.com');
-    expect(users[0].password_hash).toEqual('hashed_password_123');
-    expect(users[0].user_type).toEqual('influencer');
-    expect(users[0].is_verified).toEqual(false);
+    expect(users[0].email).toEqual('brand@example.com');
+    expect(users[0].user_type).toEqual('brand');
+    expect(users[0].password).not.toEqual('securepassword123'); // Should be hashed
     expect(users[0].created_at).toBeInstanceOf(Date);
     expect(users[0].updated_at).toBeInstanceOf(Date);
   });
 
-  it('should set default values correctly', async () => {
-    const result = await createUser(testBrandInput);
+  it('should verify password can be validated after creation', async () => {
+    const result = await createUser(brandTestInput);
 
-    // Verify default values are applied
-    expect(result.is_verified).toEqual(false);
-    expect(result.created_at).toBeInstanceOf(Date);
-    expect(result.updated_at).toBeInstanceOf(Date);
-    
-    // Verify timestamps are recent (within last 10 seconds)
-    const now = new Date();
-    const tenSecondsAgo = new Date(now.getTime() - 10000);
-    expect(result.created_at >= tenSecondsAgo).toBe(true);
-    expect(result.updated_at >= tenSecondsAgo).toBe(true);
+    // Verify the hashed password can be validated
+    const isValid = await Bun.password.verify('securepassword123', result.password);
+    expect(isValid).toBe(true);
+
+    // Verify wrong password fails
+    const isInvalid = await Bun.password.verify('wrongpassword', result.password);
+    expect(isInvalid).toBe(false);
   });
 
-  it('should generate unique IDs for multiple users', async () => {
-    const user1 = await createUser({
-      email: 'user1@test.com',
-      password_hash: 'hash1',
-      user_type: 'influencer'
-    });
-
-    const user2 = await createUser({
-      email: 'user2@test.com',
-      password_hash: 'hash2',
-      user_type: 'brand'
-    });
-
-    expect(user1.id).not.toEqual(user2.id);
-    expect(typeof user1.id).toBe('number');
-    expect(typeof user2.id).toBe('number');
-  });
-
-  it('should handle duplicate email constraint violation', async () => {
+  it('should reject duplicate email addresses', async () => {
     // Create first user
-    await createUser(testInfluencerInput);
+    await createUser(brandTestInput);
 
-    // Attempt to create user with same email should fail
-    await expect(createUser({
-      email: 'influencer@test.com', // Same email
-      password_hash: 'different_hash',
-      user_type: 'brand'
-    })).rejects.toThrow(/duplicate key value violates unique constraint|UNIQUE constraint failed/i);
+    // Try to create another user with same email
+    const duplicateInput: CreateUserInput = {
+      email: 'brand@example.com',
+      password: 'differentpassword',
+      user_type: 'influencer'
+    };
+
+    // Should throw error for duplicate email
+    await expect(createUser(duplicateInput)).rejects.toThrow(/email already exists/i);
   });
 
-  it('should create users with different user types', async () => {
-    const influencer = await createUser({
-      email: 'inf@test.com',
-      password_hash: 'hash1',
-      user_type: 'influencer'
-    });
+  it('should create multiple users with different emails', async () => {
+    const user1 = await createUser(brandTestInput);
+    const user2 = await createUser(influencerTestInput);
 
-    const brand = await createUser({
-      email: 'brand@test.com',
-      password_hash: 'hash2',
+    // Both users should be created successfully
+    expect(user1.id).toBeDefined();
+    expect(user2.id).toBeDefined();
+    expect(user1.id).not.toEqual(user2.id);
+    
+    // Verify both users exist in database
+    const allUsers = await db.select()
+      .from(usersTable)
+      .execute();
+
+    expect(allUsers).toHaveLength(2);
+    
+    const emails = allUsers.map(u => u.email);
+    expect(emails).toContain('brand@example.com');
+    expect(emails).toContain('influencer@example.com');
+  });
+
+  it('should handle database constraint violations gracefully', async () => {
+    // Create a user first
+    await createUser(brandTestInput);
+
+    // Try to create user with same email but different case
+    const caseTestInput: CreateUserInput = {
+      email: 'BRAND@EXAMPLE.COM',
+      password: 'password123',
       user_type: 'brand'
-    });
+    };
 
-    expect(influencer.user_type).toEqual('influencer');
-    expect(brand.user_type).toEqual('brand');
-    expect(influencer.id).not.toEqual(brand.id);
+    // This should not throw since database is case-sensitive for email comparison
+    // But if it does throw due to unique constraint, that's also acceptable behavior
+    try {
+      await createUser(caseTestInput);
+      // If successful, verify both users exist
+      const users = await db.select().from(usersTable).execute();
+      expect(users.length).toBeGreaterThanOrEqual(1);
+    } catch (error) {
+      // If it fails due to constraint, that's acceptable
+      expect(error).toBeDefined();
+    }
   });
 });

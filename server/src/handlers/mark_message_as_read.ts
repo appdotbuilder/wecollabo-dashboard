@@ -1,16 +1,34 @@
+import { db } from '../db';
+import { directMessagesTable } from '../db/schema';
 import { type MarkMessageAsReadInput, type DirectMessage } from '../schema';
+import { eq, and } from 'drizzle-orm';
 
 export const markMessageAsRead = async (input: MarkMessageAsReadInput): Promise<DirectMessage> => {
-  // This is a placeholder declaration! Real code should be implemented here.
-  // The goal of this handler is marking a specific message as read in the database.
-  // Should validate that the user_id is the recipient of the message and update the is_read field.
-  return Promise.resolve({
-    id: input.message_id,
-    sender_id: 1,
-    recipient_id: input.user_id,
-    content: 'Example message content',
-    is_read: true,
-    created_at: new Date(),
-    updated_at: new Date()
-  } as DirectMessage);
+  try {
+    // Update the message, but only if the user_id is the recipient
+    const result = await db.update(directMessagesTable)
+      .set({
+        is_read: true,
+        updated_at: new Date()
+      })
+      .where(
+        and(
+          eq(directMessagesTable.id, input.message_id),
+          eq(directMessagesTable.recipient_id, input.user_id)
+        )
+      )
+      .returning()
+      .execute();
+
+    // If no message was updated, it means either the message doesn't exist
+    // or the user is not the recipient
+    if (result.length === 0) {
+      throw new Error('Message not found or user is not the recipient');
+    }
+
+    return result[0];
+  } catch (error) {
+    console.error('Mark message as read failed:', error);
+    throw error;
+  }
 };

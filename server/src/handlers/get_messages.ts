@@ -1,20 +1,47 @@
+import { db } from '../db';
+import { directMessagesTable } from '../db/schema';
 import { type GetMessagesInput, type DirectMessage } from '../schema';
+import { or, and, eq, desc } from 'drizzle-orm';
 
 export const getMessages = async (input: GetMessagesInput): Promise<DirectMessage[]> => {
-  // This is a placeholder declaration! Real code should be implemented here.
-  // The goal of this handler is fetching direct messages for a user from the database.
-  // If other_user_id is provided, return messages between user_id and other_user_id.
-  // If other_user_id is not provided, return all messages for user_id.
-  // Should order messages by created_at for proper conversation flow.
-  return Promise.resolve([
-    {
-      id: 1,
-      sender_id: input.user_id,
-      recipient_id: input.other_user_id || 2,
-      content: 'Hello, interested in a collaboration!',
-      is_read: false,
-      created_at: new Date(),
-      updated_at: new Date()
+  try {
+    let query = db.select().from(directMessagesTable);
+
+    if (input.other_user_id) {
+      // Return messages between user_id and other_user_id (bidirectional conversation)
+      const whereCondition = or(
+        and(
+          eq(directMessagesTable.sender_id, input.user_id),
+          eq(directMessagesTable.recipient_id, input.other_user_id)
+        ),
+        and(
+          eq(directMessagesTable.sender_id, input.other_user_id),
+          eq(directMessagesTable.recipient_id, input.user_id)
+        )
+      );
+      
+      const results = await query
+        .where(whereCondition)
+        .orderBy(directMessagesTable.created_at)
+        .execute();
+      
+      return results;
+    } else {
+      // Return all messages for user_id (both sent and received)
+      const whereCondition = or(
+        eq(directMessagesTable.sender_id, input.user_id),
+        eq(directMessagesTable.recipient_id, input.user_id)
+      );
+
+      const results = await query
+        .where(whereCondition)
+        .orderBy(directMessagesTable.created_at)
+        .execute();
+
+      return results;
     }
-  ] as DirectMessage[]);
+  } catch (error) {
+    console.error('Get messages failed:', error);
+    throw error;
+  }
 };
