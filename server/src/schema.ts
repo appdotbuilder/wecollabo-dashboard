@@ -1,27 +1,35 @@
 import { z } from 'zod';
 
-// Enums
-export const userTypeEnum = z.enum(['influencer', 'brand']);
-export const campaignStatusEnum = z.enum(['draft', 'active', 'paused', 'completed', 'cancelled']);
-export const collaborationStatusEnum = z.enum(['pending', 'accepted', 'declined', 'in_progress', 'completed', 'cancelled']);
-export const deliverableStatusEnum = z.enum(['pending', 'submitted', 'approved', 'revision_requested', 'rejected']);
-export const paymentStatusEnum = z.enum(['pending', 'in_escrow', 'released', 'refunded']);
-export const messageTypeEnum = z.enum(['text', 'file', 'system']);
-export const disputeStatusEnum = z.enum(['open', 'in_review', 'resolved', 'closed']);
-export const teamRoleEnum = z.enum(['admin', 'manager', 'member']);
+// User type enum
+export const userTypeEnum = z.enum(['brand', 'influencer']);
+export type UserType = z.infer<typeof userTypeEnum>;
 
-// User schemas
+// Base user schema
 export const userSchema = z.object({
   id: z.number(),
   email: z.string().email(),
-  password_hash: z.string(),
+  password: z.string(),
   user_type: userTypeEnum,
-  is_verified: z.boolean(),
   created_at: z.coerce.date(),
   updated_at: z.coerce.date()
 });
 
 export type User = z.infer<typeof userSchema>;
+
+// Brand profile schema
+export const brandProfileSchema = z.object({
+  id: z.number(),
+  user_id: z.number(),
+  company_name: z.string(),
+  description: z.string().nullable(),
+  website: z.string().nullable(),
+  industry: z.string().nullable(),
+  logo_url: z.string().nullable(),
+  created_at: z.coerce.date(),
+  updated_at: z.coerce.date()
+});
+
+export type BrandProfile = z.infer<typeof brandProfileSchema>;
 
 // Influencer profile schema
 export const influencerProfileSchema = z.object({
@@ -29,281 +37,147 @@ export const influencerProfileSchema = z.object({
   user_id: z.number(),
   display_name: z.string(),
   bio: z.string().nullable(),
-  profile_image: z.string().nullable(),
-  total_reach: z.number(),
-  engagement_rate: z.number(),
-  total_collaborations: z.number(),
-  rating: z.number(),
-  total_earnings: z.number(),
+  avatar_url: z.string().nullable(),
+  instagram_handle: z.string().nullable(),
+  tiktok_handle: z.string().nullable(),
+  youtube_handle: z.string().nullable(),
+  follower_count: z.number().nullable(),
+  engagement_rate: z.number().nullable(),
+  category: z.string().nullable(),
   created_at: z.coerce.date(),
   updated_at: z.coerce.date()
 });
 
 export type InfluencerProfile = z.infer<typeof influencerProfileSchema>;
 
-// Brand profile schema
-export const brandProfileSchema = z.object({
+// Direct message schema
+export const directMessageSchema = z.object({
   id: z.number(),
-  user_id: z.number(),
-  company_name: z.string(),
-  company_description: z.string().nullable(),
-  logo: z.string().nullable(),
-  website: z.string().nullable(),
-  industry: z.string().nullable(),
-  total_campaigns: z.number(),
-  rating: z.number(),
-  created_at: z.coerce.date(),
-  updated_at: z.coerce.date()
-});
-
-export type BrandProfile = z.infer<typeof brandProfileSchema>;
-
-// Campaign schema
-export const campaignSchema = z.object({
-  id: z.number(),
-  brand_id: z.number(),
-  title: z.string(),
-  description: z.string(),
-  budget: z.number(),
-  deliverable_requirements: z.string(),
-  start_date: z.coerce.date(),
-  end_date: z.coerce.date(),
-  status: campaignStatusEnum,
-  created_at: z.coerce.date(),
-  updated_at: z.coerce.date()
-});
-
-export type Campaign = z.infer<typeof campaignSchema>;
-
-// Collaboration schema
-export const collaborationSchema = z.object({
-  id: z.number(),
-  campaign_id: z.number(),
-  influencer_id: z.number(),
-  agreed_price: z.number(),
-  status: collaborationStatusEnum,
-  created_at: z.coerce.date(),
-  updated_at: z.coerce.date()
-});
-
-export type Collaboration = z.infer<typeof collaborationSchema>;
-
-// Deliverable schema
-export const deliverableSchema = z.object({
-  id: z.number(),
-  collaboration_id: z.number(),
-  title: z.string(),
-  description: z.string().nullable(),
-  file_url: z.string().nullable(),
-  status: deliverableStatusEnum,
-  feedback: z.string().nullable(),
-  submitted_at: z.coerce.date().nullable(),
-  created_at: z.coerce.date(),
-  updated_at: z.coerce.date()
-});
-
-export type Deliverable = z.infer<typeof deliverableSchema>;
-
-// Payment schema
-export const paymentSchema = z.object({
-  id: z.number(),
-  collaboration_id: z.number(),
-  amount: z.number(),
-  platform_commission: z.number(),
-  influencer_payout: z.number(),
-  status: paymentStatusEnum,
-  transaction_id: z.string().nullable(),
-  created_at: z.coerce.date(),
-  updated_at: z.coerce.date()
-});
-
-export type Payment = z.infer<typeof paymentSchema>;
-
-// Team member schema
-export const teamMemberSchema = z.object({
-  id: z.number(),
-  brand_id: z.number(),
-  user_id: z.number(),
-  role: teamRoleEnum,
-  invited_at: z.coerce.date(),
-  joined_at: z.coerce.date().nullable(),
-  created_at: z.coerce.date(),
-  updated_at: z.coerce.date()
-});
-
-export type TeamMember = z.infer<typeof teamMemberSchema>;
-
-// Message schema
-export const messageSchema = z.object({
-  id: z.number(),
-  collaboration_id: z.number(),
   sender_id: z.number(),
+  recipient_id: z.number(),
   content: z.string(),
-  message_type: messageTypeEnum,
-  file_url: z.string().nullable(),
-  sent_at: z.coerce.date(),
-  read_at: z.coerce.date().nullable(),
-  created_at: z.coerce.date()
+  is_read: z.boolean(),
+  created_at: z.coerce.date(),
+  updated_at: z.coerce.date()
 });
 
-export type Message = z.infer<typeof messageSchema>;
+export type DirectMessage = z.infer<typeof directMessageSchema>;
 
 // Review schema
 export const reviewSchema = z.object({
   id: z.number(),
-  collaboration_id: z.number(),
-  reviewer_id: z.number(),
-  reviewee_id: z.number(),
-  rating: z.number().min(1).max(5),
-  comment: z.string().nullable(),
+  brand_user_id: z.number(),
+  influencer_user_id: z.number(),
+  rating: z.number().int().min(1).max(5),
+  feedback: z.string(),
   created_at: z.coerce.date(),
   updated_at: z.coerce.date()
 });
 
 export type Review = z.infer<typeof reviewSchema>;
 
-// Dispute schema
-export const disputeSchema = z.object({
-  id: z.number(),
-  collaboration_id: z.number(),
-  initiated_by: z.number(),
-  subject: z.string(),
-  description: z.string(),
-  status: disputeStatusEnum,
-  resolution: z.string().nullable(),
-  resolved_at: z.coerce.date().nullable(),
-  created_at: z.coerce.date(),
-  updated_at: z.coerce.date()
-});
-
-export type Dispute = z.infer<typeof disputeSchema>;
-
-// Input schemas for creating records
+// Input schemas for creating entities
 export const createUserInputSchema = z.object({
   email: z.string().email(),
-  password_hash: z.string(),
+  password: z.string().min(6),
   user_type: userTypeEnum
 });
 
 export type CreateUserInput = z.infer<typeof createUserInputSchema>;
 
-export const createInfluencerProfileInputSchema = z.object({
-  user_id: z.number(),
-  display_name: z.string(),
-  bio: z.string().nullable().optional(),
-  profile_image: z.string().nullable().optional(),
-  total_reach: z.number().nonnegative(),
-  engagement_rate: z.number().min(0).max(100)
-});
-
-export type CreateInfluencerProfileInput = z.infer<typeof createInfluencerProfileInputSchema>;
-
 export const createBrandProfileInputSchema = z.object({
   user_id: z.number(),
   company_name: z.string(),
-  company_description: z.string().nullable().optional(),
-  logo: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
   website: z.string().nullable().optional(),
-  industry: z.string().nullable().optional()
+  industry: z.string().nullable().optional(),
+  logo_url: z.string().nullable().optional()
 });
 
 export type CreateBrandProfileInput = z.infer<typeof createBrandProfileInputSchema>;
 
-export const createCampaignInputSchema = z.object({
-  brand_id: z.number(),
-  title: z.string(),
-  description: z.string(),
-  budget: z.number().positive(),
-  deliverable_requirements: z.string(),
-  start_date: z.coerce.date(),
-  end_date: z.coerce.date()
-});
-
-export type CreateCampaignInput = z.infer<typeof createCampaignInputSchema>;
-
-export const createCollaborationInputSchema = z.object({
-  campaign_id: z.number(),
-  influencer_id: z.number(),
-  agreed_price: z.number().positive()
-});
-
-export type CreateCollaborationInput = z.infer<typeof createCollaborationInputSchema>;
-
-export const createDeliverableInputSchema = z.object({
-  collaboration_id: z.number(),
-  title: z.string(),
-  description: z.string().nullable().optional(),
-  file_url: z.string().nullable().optional()
-});
-
-export type CreateDeliverableInput = z.infer<typeof createDeliverableInputSchema>;
-
-export const createPaymentInputSchema = z.object({
-  collaboration_id: z.number(),
-  amount: z.number().positive(),
-  platform_commission: z.number().nonnegative(),
-  influencer_payout: z.number().positive()
-});
-
-export type CreatePaymentInput = z.infer<typeof createPaymentInputSchema>;
-
-export const createTeamMemberInputSchema = z.object({
-  brand_id: z.number(),
+export const createInfluencerProfileInputSchema = z.object({
   user_id: z.number(),
-  role: teamRoleEnum
+  display_name: z.string(),
+  bio: z.string().nullable().optional(),
+  avatar_url: z.string().nullable().optional(),
+  instagram_handle: z.string().nullable().optional(),
+  tiktok_handle: z.string().nullable().optional(),
+  youtube_handle: z.string().nullable().optional(),
+  follower_count: z.number().nullable().optional(),
+  engagement_rate: z.number().nullable().optional(),
+  category: z.string().nullable().optional()
 });
 
-export type CreateTeamMemberInput = z.infer<typeof createTeamMemberInputSchema>;
+export type CreateInfluencerProfileInput = z.infer<typeof createInfluencerProfileInputSchema>;
 
-export const createMessageInputSchema = z.object({
-  collaboration_id: z.number(),
+export const createDirectMessageInputSchema = z.object({
   sender_id: z.number(),
-  content: z.string(),
-  message_type: messageTypeEnum,
-  file_url: z.string().nullable().optional()
+  recipient_id: z.number(),
+  content: z.string()
 });
 
-export type CreateMessageInput = z.infer<typeof createMessageInputSchema>;
+export type CreateDirectMessageInput = z.infer<typeof createDirectMessageInputSchema>;
 
 export const createReviewInputSchema = z.object({
-  collaboration_id: z.number(),
-  reviewer_id: z.number(),
-  reviewee_id: z.number(),
-  rating: z.number().min(1).max(5),
-  comment: z.string().nullable().optional()
+  brand_user_id: z.number(),
+  influencer_user_id: z.number(),
+  rating: z.number().int().min(1).max(5),
+  feedback: z.string()
 });
 
 export type CreateReviewInput = z.infer<typeof createReviewInputSchema>;
 
-export const createDisputeInputSchema = z.object({
-  collaboration_id: z.number(),
-  initiated_by: z.number(),
-  subject: z.string(),
-  description: z.string()
-});
-
-export type CreateDisputeInput = z.infer<typeof createDisputeInputSchema>;
-
 // Update schemas
-export const updateCollaborationStatusInputSchema = z.object({
-  id: z.number(),
-  status: collaborationStatusEnum
+export const updateBrandProfileInputSchema = z.object({
+  user_id: z.number(),
+  company_name: z.string().optional(),
+  description: z.string().nullable().optional(),
+  website: z.string().nullable().optional(),
+  industry: z.string().nullable().optional(),
+  logo_url: z.string().nullable().optional()
 });
 
-export type UpdateCollaborationStatusInput = z.infer<typeof updateCollaborationStatusInputSchema>;
+export type UpdateBrandProfileInput = z.infer<typeof updateBrandProfileInputSchema>;
 
-export const updateDeliverableStatusInputSchema = z.object({
-  id: z.number(),
-  status: deliverableStatusEnum,
-  feedback: z.string().nullable().optional()
+export const updateInfluencerProfileInputSchema = z.object({
+  user_id: z.number(),
+  display_name: z.string().optional(),
+  bio: z.string().nullable().optional(),
+  avatar_url: z.string().nullable().optional(),
+  instagram_handle: z.string().nullable().optional(),
+  tiktok_handle: z.string().nullable().optional(),
+  youtube_handle: z.string().nullable().optional(),
+  follower_count: z.number().nullable().optional(),
+  engagement_rate: z.number().nullable().optional(),
+  category: z.string().nullable().optional()
 });
 
-export type UpdateDeliverableStatusInput = z.infer<typeof updateDeliverableStatusInputSchema>;
+export type UpdateInfluencerProfileInput = z.infer<typeof updateInfluencerProfileInputSchema>;
 
-export const updatePaymentStatusInputSchema = z.object({
-  id: z.number(),
-  status: paymentStatusEnum,
-  transaction_id: z.string().nullable().optional()
+export const markMessageAsReadInputSchema = z.object({
+  message_id: z.number(),
+  user_id: z.number()
 });
 
-export type UpdatePaymentStatusInput = z.infer<typeof updatePaymentStatusInputSchema>;
+export type MarkMessageAsReadInput = z.infer<typeof markMessageAsReadInputSchema>;
+
+// Query schemas
+export const getMessagesInputSchema = z.object({
+  user_id: z.number(),
+  other_user_id: z.number().optional()
+});
+
+export type GetMessagesInput = z.infer<typeof getMessagesInputSchema>;
+
+export const getInfluencerReviewsInputSchema = z.object({
+  influencer_user_id: z.number()
+});
+
+export type GetInfluencerReviewsInput = z.infer<typeof getInfluencerReviewsInputSchema>;
+
+export const getUserProfileInputSchema = z.object({
+  user_id: z.number()
+});
+
+export type GetUserProfileInput = z.infer<typeof getUserProfileInputSchema>;

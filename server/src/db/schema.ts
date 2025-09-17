@@ -1,39 +1,15 @@
-import { serial, text, pgTable, timestamp, numeric, integer, boolean, pgEnum } from 'drizzle-orm/pg-core';
+import { serial, text, pgTable, timestamp, integer, boolean, numeric, pgEnum } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
-// Enums
-export const userTypeEnum = pgEnum('user_type', ['influencer', 'brand']);
-export const campaignStatusEnum = pgEnum('campaign_status', ['draft', 'active', 'paused', 'completed', 'cancelled']);
-export const collaborationStatusEnum = pgEnum('collaboration_status', ['pending', 'accepted', 'declined', 'in_progress', 'completed', 'cancelled']);
-export const deliverableStatusEnum = pgEnum('deliverable_status', ['pending', 'submitted', 'approved', 'revision_requested', 'rejected']);
-export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'in_escrow', 'released', 'refunded']);
-export const messageTypeEnum = pgEnum('message_type', ['text', 'file', 'system']);
-export const disputeStatusEnum = pgEnum('dispute_status', ['open', 'in_review', 'resolved', 'closed']);
-export const teamRoleEnum = pgEnum('team_role', ['admin', 'manager', 'member']);
+// Enum for user types
+export const userTypeEnum = pgEnum('user_type', ['brand', 'influencer']);
 
 // Users table
 export const usersTable = pgTable('users', {
   id: serial('id').primaryKey(),
   email: text('email').notNull().unique(),
-  password_hash: text('password_hash').notNull(),
+  password: text('password').notNull(),
   user_type: userTypeEnum('user_type').notNull(),
-  is_verified: boolean('is_verified').default(false).notNull(),
-  created_at: timestamp('created_at').defaultNow().notNull(),
-  updated_at: timestamp('updated_at').defaultNow().notNull()
-});
-
-// Influencer profiles table
-export const influencerProfilesTable = pgTable('influencer_profiles', {
-  id: serial('id').primaryKey(),
-  user_id: integer('user_id').notNull().references(() => usersTable.id),
-  display_name: text('display_name').notNull(),
-  bio: text('bio'),
-  profile_image: text('profile_image'),
-  total_reach: integer('total_reach').default(0).notNull(),
-  engagement_rate: numeric('engagement_rate', { precision: 5, scale: 2 }).default('0').notNull(),
-  total_collaborations: integer('total_collaborations').default(0).notNull(),
-  rating: numeric('rating', { precision: 3, scale: 2 }).default('0').notNull(),
-  total_earnings: numeric('total_earnings', { precision: 10, scale: 2 }).default('0').notNull(),
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull()
 });
@@ -41,255 +17,132 @@ export const influencerProfilesTable = pgTable('influencer_profiles', {
 // Brand profiles table
 export const brandProfilesTable = pgTable('brand_profiles', {
   id: serial('id').primaryKey(),
-  user_id: integer('user_id').notNull().references(() => usersTable.id),
+  user_id: integer('user_id').notNull().references(() => usersTable.id, { onDelete: 'cascade' }),
   company_name: text('company_name').notNull(),
-  company_description: text('company_description'),
-  logo: text('logo'),
-  website: text('website'),
-  industry: text('industry'),
-  total_campaigns: integer('total_campaigns').default(0).notNull(),
-  rating: numeric('rating', { precision: 3, scale: 2 }).default('0').notNull(),
+  description: text('description'), // Nullable
+  website: text('website'), // Nullable
+  industry: text('industry'), // Nullable
+  logo_url: text('logo_url'), // Nullable
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull()
 });
 
-// Campaigns table
-export const campaignsTable = pgTable('campaigns', {
+// Influencer profiles table
+export const influencerProfilesTable = pgTable('influencer_profiles', {
   id: serial('id').primaryKey(),
-  brand_id: integer('brand_id').notNull().references(() => brandProfilesTable.id),
-  title: text('title').notNull(),
-  description: text('description').notNull(),
-  budget: numeric('budget', { precision: 10, scale: 2 }).notNull(),
-  deliverable_requirements: text('deliverable_requirements').notNull(),
-  start_date: timestamp('start_date').notNull(),
-  end_date: timestamp('end_date').notNull(),
-  status: campaignStatusEnum('status').default('draft').notNull(),
+  user_id: integer('user_id').notNull().references(() => usersTable.id, { onDelete: 'cascade' }),
+  display_name: text('display_name').notNull(),
+  bio: text('bio'), // Nullable
+  avatar_url: text('avatar_url'), // Nullable
+  instagram_handle: text('instagram_handle'), // Nullable
+  tiktok_handle: text('tiktok_handle'), // Nullable
+  youtube_handle: text('youtube_handle'), // Nullable
+  follower_count: integer('follower_count'), // Nullable
+  engagement_rate: numeric('engagement_rate', { precision: 5, scale: 2 }), // Nullable, stored as numeric but handled as number in Zod
+  category: text('category'), // Nullable
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull()
 });
 
-// Collaborations table
-export const collaborationsTable = pgTable('collaborations', {
+// Direct messages table
+export const directMessagesTable = pgTable('direct_messages', {
   id: serial('id').primaryKey(),
-  campaign_id: integer('campaign_id').notNull().references(() => campaignsTable.id),
-  influencer_id: integer('influencer_id').notNull().references(() => influencerProfilesTable.id),
-  agreed_price: numeric('agreed_price', { precision: 10, scale: 2 }).notNull(),
-  status: collaborationStatusEnum('status').default('pending').notNull(),
-  created_at: timestamp('created_at').defaultNow().notNull(),
-  updated_at: timestamp('updated_at').defaultNow().notNull()
-});
-
-// Deliverables table
-export const deliverablesTable = pgTable('deliverables', {
-  id: serial('id').primaryKey(),
-  collaboration_id: integer('collaboration_id').notNull().references(() => collaborationsTable.id),
-  title: text('title').notNull(),
-  description: text('description'),
-  file_url: text('file_url'),
-  status: deliverableStatusEnum('status').default('pending').notNull(),
-  feedback: text('feedback'),
-  submitted_at: timestamp('submitted_at'),
-  created_at: timestamp('created_at').defaultNow().notNull(),
-  updated_at: timestamp('updated_at').defaultNow().notNull()
-});
-
-// Payments table
-export const paymentsTable = pgTable('payments', {
-  id: serial('id').primaryKey(),
-  collaboration_id: integer('collaboration_id').notNull().references(() => collaborationsTable.id),
-  amount: numeric('amount', { precision: 10, scale: 2 }).notNull(),
-  platform_commission: numeric('platform_commission', { precision: 10, scale: 2 }).notNull(),
-  influencer_payout: numeric('influencer_payout', { precision: 10, scale: 2 }).notNull(),
-  status: paymentStatusEnum('status').default('pending').notNull(),
-  transaction_id: text('transaction_id'),
-  created_at: timestamp('created_at').defaultNow().notNull(),
-  updated_at: timestamp('updated_at').defaultNow().notNull()
-});
-
-// Team members table
-export const teamMembersTable = pgTable('team_members', {
-  id: serial('id').primaryKey(),
-  brand_id: integer('brand_id').notNull().references(() => brandProfilesTable.id),
-  user_id: integer('user_id').notNull().references(() => usersTable.id),
-  role: teamRoleEnum('role').default('member').notNull(),
-  invited_at: timestamp('invited_at').defaultNow().notNull(),
-  joined_at: timestamp('joined_at'),
-  created_at: timestamp('created_at').defaultNow().notNull(),
-  updated_at: timestamp('updated_at').defaultNow().notNull()
-});
-
-// Messages table
-export const messagesTable = pgTable('messages', {
-  id: serial('id').primaryKey(),
-  collaboration_id: integer('collaboration_id').notNull().references(() => collaborationsTable.id),
-  sender_id: integer('sender_id').notNull().references(() => usersTable.id),
+  sender_id: integer('sender_id').notNull().references(() => usersTable.id, { onDelete: 'cascade' }),
+  recipient_id: integer('recipient_id').notNull().references(() => usersTable.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
-  message_type: messageTypeEnum('message_type').default('text').notNull(),
-  file_url: text('file_url'),
-  sent_at: timestamp('sent_at').defaultNow().notNull(),
-  read_at: timestamp('read_at'),
-  created_at: timestamp('created_at').defaultNow().notNull()
+  is_read: boolean('is_read').default(false).notNull(),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull()
 });
 
 // Reviews table
 export const reviewsTable = pgTable('reviews', {
   id: serial('id').primaryKey(),
-  collaboration_id: integer('collaboration_id').notNull().references(() => collaborationsTable.id),
-  reviewer_id: integer('reviewer_id').notNull().references(() => usersTable.id),
-  reviewee_id: integer('reviewee_id').notNull().references(() => usersTable.id),
-  rating: integer('rating').notNull(),
-  comment: text('comment'),
-  created_at: timestamp('created_at').defaultNow().notNull(),
-  updated_at: timestamp('updated_at').defaultNow().notNull()
-});
-
-// Disputes table
-export const disputesTable = pgTable('disputes', {
-  id: serial('id').primaryKey(),
-  collaboration_id: integer('collaboration_id').notNull().references(() => collaborationsTable.id),
-  initiated_by: integer('initiated_by').notNull().references(() => usersTable.id),
-  subject: text('subject').notNull(),
-  description: text('description').notNull(),
-  status: disputeStatusEnum('status').default('open').notNull(),
-  resolution: text('resolution'),
-  resolved_at: timestamp('resolved_at'),
+  brand_user_id: integer('brand_user_id').notNull().references(() => usersTable.id, { onDelete: 'cascade' }),
+  influencer_user_id: integer('influencer_user_id').notNull().references(() => usersTable.id, { onDelete: 'cascade' }),
+  rating: integer('rating').notNull(), // 1-5 stars
+  feedback: text('feedback').notNull(),
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull()
 });
 
 // Relations
 export const usersRelations = relations(usersTable, ({ one, many }) => ({
-  influencerProfile: one(influencerProfilesTable, {
-    fields: [usersTable.id],
-    references: [influencerProfilesTable.user_id]
-  }),
   brandProfile: one(brandProfilesTable, {
     fields: [usersTable.id],
-    references: [brandProfilesTable.user_id]
+    references: [brandProfilesTable.user_id],
   }),
-  teamMemberships: many(teamMembersTable),
-  sentMessages: many(messagesTable),
-  reviewsGiven: many(reviewsTable, { relationName: 'reviewer' }),
-  reviewsReceived: many(reviewsTable, { relationName: 'reviewee' }),
-  disputesInitiated: many(disputesTable)
+  influencerProfile: one(influencerProfilesTable, {
+    fields: [usersTable.id],
+    references: [influencerProfilesTable.user_id],
+  }),
+  sentMessages: many(directMessagesTable, { relationName: 'sender' }),
+  receivedMessages: many(directMessagesTable, { relationName: 'recipient' }),
+  givenReviews: many(reviewsTable, { relationName: 'brandReviews' }),
+  receivedReviews: many(reviewsTable, { relationName: 'influencerReviews' }),
 }));
 
-export const influencerProfilesRelations = relations(influencerProfilesTable, ({ one, many }) => ({
-  user: one(usersTable, {
-    fields: [influencerProfilesTable.user_id],
-    references: [usersTable.id]
-  }),
-  collaborations: many(collaborationsTable)
-}));
-
-export const brandProfilesRelations = relations(brandProfilesTable, ({ one, many }) => ({
+export const brandProfilesRelations = relations(brandProfilesTable, ({ one }) => ({
   user: one(usersTable, {
     fields: [brandProfilesTable.user_id],
-    references: [usersTable.id]
+    references: [usersTable.id],
   }),
-  campaigns: many(campaignsTable),
-  teamMembers: many(teamMembersTable)
 }));
 
-export const campaignsRelations = relations(campaignsTable, ({ one, many }) => ({
-  brand: one(brandProfilesTable, {
-    fields: [campaignsTable.brand_id],
-    references: [brandProfilesTable.id]
-  }),
-  collaborations: many(collaborationsTable)
-}));
-
-export const collaborationsRelations = relations(collaborationsTable, ({ one, many }) => ({
-  campaign: one(campaignsTable, {
-    fields: [collaborationsTable.campaign_id],
-    references: [campaignsTable.id]
-  }),
-  influencer: one(influencerProfilesTable, {
-    fields: [collaborationsTable.influencer_id],
-    references: [influencerProfilesTable.id]
-  }),
-  deliverables: many(deliverablesTable),
-  payments: many(paymentsTable),
-  messages: many(messagesTable),
-  reviews: many(reviewsTable),
-  disputes: many(disputesTable)
-}));
-
-export const deliverablesRelations = relations(deliverablesTable, ({ one }) => ({
-  collaboration: one(collaborationsTable, {
-    fields: [deliverablesTable.collaboration_id],
-    references: [collaborationsTable.id]
-  })
-}));
-
-export const paymentsRelations = relations(paymentsTable, ({ one }) => ({
-  collaboration: one(collaborationsTable, {
-    fields: [paymentsTable.collaboration_id],
-    references: [collaborationsTable.id]
-  })
-}));
-
-export const teamMembersRelations = relations(teamMembersTable, ({ one }) => ({
-  brand: one(brandProfilesTable, {
-    fields: [teamMembersTable.brand_id],
-    references: [brandProfilesTable.id]
-  }),
+export const influencerProfilesRelations = relations(influencerProfilesTable, ({ one }) => ({
   user: one(usersTable, {
-    fields: [teamMembersTable.user_id],
-    references: [usersTable.id]
-  })
+    fields: [influencerProfilesTable.user_id],
+    references: [usersTable.id],
+  }),
 }));
 
-export const messagesRelations = relations(messagesTable, ({ one }) => ({
-  collaboration: one(collaborationsTable, {
-    fields: [messagesTable.collaboration_id],
-    references: [collaborationsTable.id]
-  }),
+export const directMessagesRelations = relations(directMessagesTable, ({ one }) => ({
   sender: one(usersTable, {
-    fields: [messagesTable.sender_id],
-    references: [usersTable.id]
-  })
+    fields: [directMessagesTable.sender_id],
+    references: [usersTable.id],
+    relationName: 'sender',
+  }),
+  recipient: one(usersTable, {
+    fields: [directMessagesTable.recipient_id],
+    references: [usersTable.id],
+    relationName: 'recipient',
+  }),
 }));
 
 export const reviewsRelations = relations(reviewsTable, ({ one }) => ({
-  collaboration: one(collaborationsTable, {
-    fields: [reviewsTable.collaboration_id],
-    references: [collaborationsTable.id]
-  }),
-  reviewer: one(usersTable, {
-    fields: [reviewsTable.reviewer_id],
+  brand: one(usersTable, {
+    fields: [reviewsTable.brand_user_id],
     references: [usersTable.id],
-    relationName: 'reviewer'
+    relationName: 'brandReviews',
   }),
-  reviewee: one(usersTable, {
-    fields: [reviewsTable.reviewee_id],
+  influencer: one(usersTable, {
+    fields: [reviewsTable.influencer_user_id],
     references: [usersTable.id],
-    relationName: 'reviewee'
-  })
+    relationName: 'influencerReviews',
+  }),
 }));
 
-export const disputesRelations = relations(disputesTable, ({ one }) => ({
-  collaboration: one(collaborationsTable, {
-    fields: [disputesTable.collaboration_id],
-    references: [collaborationsTable.id]
-  }),
-  initiatedBy: one(usersTable, {
-    fields: [disputesTable.initiated_by],
-    references: [usersTable.id]
-  })
-}));
+// TypeScript types for the table schemas
+export type User = typeof usersTable.$inferSelect;
+export type NewUser = typeof usersTable.$inferInsert;
 
-// Export all tables for proper query building
+export type BrandProfile = typeof brandProfilesTable.$inferSelect;
+export type NewBrandProfile = typeof brandProfilesTable.$inferInsert;
+
+export type InfluencerProfile = typeof influencerProfilesTable.$inferSelect;
+export type NewInfluencerProfile = typeof influencerProfilesTable.$inferInsert;
+
+export type DirectMessage = typeof directMessagesTable.$inferSelect;
+export type NewDirectMessage = typeof directMessagesTable.$inferInsert;
+
+export type Review = typeof reviewsTable.$inferSelect;
+export type NewReview = typeof reviewsTable.$inferInsert;
+
+// Export all tables and relations for proper query building
 export const tables = {
   users: usersTable,
-  influencerProfiles: influencerProfilesTable,
   brandProfiles: brandProfilesTable,
-  campaigns: campaignsTable,
-  collaborations: collaborationsTable,
-  deliverables: deliverablesTable,
-  payments: paymentsTable,
-  teamMembers: teamMembersTable,
-  messages: messagesTable,
+  influencerProfiles: influencerProfilesTable,
+  directMessages: directMessagesTable,
   reviews: reviewsTable,
-  disputes: disputesTable
 };

@@ -1,13 +1,13 @@
-import { type CreateInfluencerProfileInput, type InfluencerProfile } from '../schema';
+import { type UpdateInfluencerProfileInput, type InfluencerProfile } from '../schema';
 
-export const createInfluencerProfile = async (input: CreateInfluencerProfileInput): Promise<InfluencerProfile> => {
+export const updateInfluencerProfile = async (input: UpdateInfluencerProfileInput): Promise<InfluencerProfile> => {
   // This is a placeholder declaration! Real code should be implemented here.
-  // The goal of this handler is creating an influencer profile associated with a user and persisting it in the database.
-  // Should validate that the user_id exists and is of type 'influencer'.
+  // The goal of this handler is updating an existing influencer profile in the database.
+  // Should validate that the user_id exists and the user owns the profile being updated.
   return Promise.resolve({
     id: 1, // Placeholder ID
     user_id: input.user_id,
-    display_name: input.display_name,
+    display_name: input.display_name || 'Example Influencer',
     bio: input.bio || null,
     avatar_url: input.avatar_url || null,
     instagram_handle: input.instagram_handle || null,
