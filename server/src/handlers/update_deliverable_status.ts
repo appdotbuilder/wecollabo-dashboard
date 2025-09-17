@@ -1,19 +1,45 @@
+import { db } from '../db';
+import { deliverablesTable } from '../db/schema';
 import { type UpdateDeliverableStatusInput, type Deliverable } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function updateDeliverableStatus(input: UpdateDeliverableStatusInput): Promise<Deliverable> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating the status of a deliverable (approve, request revision, etc.).
-    // It should validate status transitions and update submitted_at when status changes to 'submitted'.
-    return Promise.resolve({
-        id: input.id,
-        collaboration_id: 0,
-        title: '',
-        description: null,
-        file_url: null,
-        status: input.status,
-        feedback: input.feedback || null,
-        submitted_at: input.status === 'submitted' ? new Date() : null,
-        created_at: new Date(),
-        updated_at: new Date()
-    } as Deliverable);
-}
+export const updateDeliverableStatus = async (input: UpdateDeliverableStatusInput): Promise<Deliverable> => {
+  try {
+    // Prepare update values
+    const updateValues: any = {
+      status: input.status,
+      updated_at: new Date()
+    };
+
+    // Add feedback if provided
+    if (input.feedback !== undefined) {
+      updateValues.feedback = input.feedback;
+    }
+
+    // Set submitted_at when status changes to 'submitted'
+    if (input.status === 'submitted') {
+      updateValues.submitted_at = new Date();
+    }
+
+    // Update deliverable record
+    const result = await db.update(deliverablesTable)
+      .set(updateValues)
+      .where(eq(deliverablesTable.id, input.id))
+      .returning()
+      .execute();
+
+    if (result.length === 0) {
+      throw new Error(`Deliverable with id ${input.id} not found`);
+    }
+
+    // Convert numeric fields back to numbers before returning
+    const deliverable = result[0];
+    return {
+      ...deliverable,
+      // All fields are already properly typed, no numeric conversions needed for deliverables
+    };
+  } catch (error) {
+    console.error('Deliverable status update failed:', error);
+    throw error;
+  }
+};

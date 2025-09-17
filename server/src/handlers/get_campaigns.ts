@@ -1,8 +1,23 @@
+import { db } from '../db';
+import { campaignsTable } from '../db/schema';
 import { type Campaign } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function getCampaigns(): Promise<Campaign[]> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching all active campaigns from the database.
-    // It should return campaigns with status 'active' for influencer discovery.
-    return Promise.resolve([] as Campaign[]);
-}
+export const getCampaigns = async (): Promise<Campaign[]> => {
+  try {
+    // Fetch all active campaigns from the database
+    const results = await db.select()
+      .from(campaignsTable)
+      .where(eq(campaignsTable.status, 'active'))
+      .execute();
+
+    // Convert numeric fields back to numbers before returning
+    return results.map(campaign => ({
+      ...campaign,
+      budget: parseFloat(campaign.budget)
+    }));
+  } catch (error) {
+    console.error('Failed to fetch campaigns:', error);
+    throw error;
+  }
+};

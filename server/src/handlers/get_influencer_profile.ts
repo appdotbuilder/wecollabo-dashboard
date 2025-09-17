@@ -1,8 +1,30 @@
+import { db } from '../db';
+import { influencerProfilesTable } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import { type InfluencerProfile } from '../schema';
 
 export async function getInfluencerProfile(userId: number): Promise<InfluencerProfile | null> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching an influencer profile by user ID.
-    // It should return the profile with calculated metrics and collaboration history.
-    return Promise.resolve(null);
+  try {
+    const results = await db.select()
+      .from(influencerProfilesTable)
+      .where(eq(influencerProfilesTable.user_id, userId))
+      .execute();
+
+    if (results.length === 0) {
+      return null;
+    }
+
+    const profile = results[0];
+
+    // Convert numeric fields back to numbers
+    return {
+      ...profile,
+      engagement_rate: parseFloat(profile.engagement_rate),
+      rating: parseFloat(profile.rating),
+      total_earnings: parseFloat(profile.total_earnings)
+    };
+  } catch (error) {
+    console.error('Failed to fetch influencer profile:', error);
+    throw error;
+  }
 }

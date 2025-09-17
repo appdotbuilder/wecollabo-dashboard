@@ -1,16 +1,62 @@
+import { db } from '../db';
+import { collaborationsTable } from '../db/schema';
 import { type UpdateCollaborationStatusInput, type Collaboration } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function updateCollaborationStatus(input: UpdateCollaborationStatusInput): Promise<Collaboration> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating the status of a collaboration (accept/decline invitations, etc.).
-    // It should validate the current status allows the transition and update timestamps.
-    return Promise.resolve({
-        id: input.id,
-        campaign_id: 0,
-        influencer_id: 0,
-        agreed_price: 0,
+export const updateCollaborationStatus = async (input: UpdateCollaborationStatusInput): Promise<Collaboration> => {
+  try {
+    // First, fetch the current collaboration to validate it exists and check current status
+    const existingCollaboration = await db.select()
+      .from(collaborationsTable)
+      .where(eq(collaborationsTable.id, input.id))
+      .execute();
+
+    if (existingCollaboration.length === 0) {
+      throw new Error(`Collaboration with id ${input.id} not found`);
+    }
+
+    const currentCollaboration = existingCollaboration[0];
+    
+    // Validate status transition is allowed
+    validateStatusTransition(currentCollaboration.status, input.status);
+
+    // Update the collaboration status and updated_at timestamp
+    const result = await db.update(collaborationsTable)
+      .set({
         status: input.status,
-        created_at: new Date(),
         updated_at: new Date()
-    } as Collaboration);
+      })
+      .where(eq(collaborationsTable.id, input.id))
+      .returning()
+      .execute();
+
+    const updatedCollaboration = result[0];
+
+    // Convert numeric fields back to numbers before returning
+    return {
+      ...updatedCollaboration,
+      agreed_price: parseFloat(updatedCollaboration.agreed_price)
+    };
+  } catch (error) {
+    console.error('Collaboration status update failed:', error);
+    throw error;
+  }
+};
+
+// Helper function to validate status transitions
+function validateStatusTransition(currentStatus: string, newStatus: string): void {
+  const validTransitions: Record<string, string[]> = {
+    'pending': ['accepted', 'declined', 'cancelled'],
+    'accepted': ['in_progress', 'cancelled'],
+    'declined': [], // Terminal state - no transitions allowed
+    'in_progress': ['completed', 'cancelled'],
+    'completed': [], // Terminal state - no transitions allowed
+    'cancelled': [] // Terminal state - no transitions allowed
+  };
+
+  const allowedStatuses = validTransitions[currentStatus];
+  
+  if (!allowedStatuses || !allowedStatuses.includes(newStatus)) {
+    throw new Error(`Invalid status transition from '${currentStatus}' to '${newStatus}'`);
+  }
 }
